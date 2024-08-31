@@ -6,8 +6,8 @@
 #
 #########################################################################################
 import requests
-import random
 import copy
+from DQN import *
 
 deck_id = "rc5o65e15oms"
 
@@ -20,7 +20,8 @@ class Player:
         self.suites = []
         self.values = []
         self.is_starter = starter
-
+        self.brain = DQNManager(128, .99, .9, .05, 1000,
+                                0.005, 1e-4, 5, [0,1,2,3,4], 'cuda', 10000)
     # sets the cards of the player
     def set_cards(self, new_cards):
         self.cards = new_cards
@@ -192,7 +193,7 @@ class RoundManager:
         return {"Trump": trump, "Number": num}
 
 
-def main():
+def run_game():
     p_1 = Player(1, 1, True)
     p_2 = Player(2, 2, False)
     p_3 = Player(3, 1, False)
@@ -219,5 +220,3 @@ def main():
     return 0
 
 
-if __name__ == "__main__":
-    main()
