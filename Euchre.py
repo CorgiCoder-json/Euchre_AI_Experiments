@@ -11,7 +11,6 @@ import copy
 
 deck_id = "rc5o65e15oms"
 
-
 # Player class represents a singular player of Euchre
 class Player:
     def __init__(self, id, team_id, starter):
@@ -33,11 +32,11 @@ class Player:
         # implement brain system
         print(self.cards)
         card = int(input("Enter Card: ")) - 1
-        while (card >= len(self.cards) or card < 0):
+        while card >= len(self.cards) or card < 0:
             print("Invalid Index!")
             card = int(input("Enter Card: ")) - 1
         plays_card = self.cards[card]
-        while (suite in self.suites and not (plays_card[1] == suite)):
+        while suite in self.suites and not (plays_card[1] == suite):
             print("Play the Correct Suite!")
             card = int(input("Enter Card: ")) - 1
             plays_card = self.cards[card]
@@ -48,7 +47,7 @@ class Player:
         return plays_card
 
 
-# Round MAnager class that manages each round of Euchre
+# Round Manager class that manages each round of Euchre
 class RoundManager:
     def __init__(self, players):
         self.team_one_score = 0
@@ -155,14 +154,14 @@ class RoundManager:
 
     # converts a card code to a value for easier scoring
     def card_to_value(self, card, is_trump, suit):
-        if (is_trump):
-            if (card[0] == 'J' and card[1] == self.trump):
+        if is_trump:
+            if card[0] == 'J' and card[1] == self.trump:
                 return 13
-            elif (self.other_bauer(card[1], self.trump)):
+            elif self.other_bauer(card[1], self.trump):
                 return 12
             else:
                 return self.card_conversion_trump[str(card[0])]
-        elif (card[1] == suit):
+        elif card[1] == suit:
             return self.card_conversion_no_trump[str(card[0])]
         return 0
 
