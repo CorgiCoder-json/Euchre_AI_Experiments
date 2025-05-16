@@ -7,9 +7,10 @@
 #########################################################################################
 import requests
 import copy
+import random
 from DQN import *
 
-deck_id = "rc5o65e15oms"
+deck_id = "ic4bsd5kcv0o"
 
 # Player class represents a singular player of Euchre
 class Player:
@@ -21,7 +22,7 @@ class Player:
         self.values = []
         self.is_starter = starter
         self.brain = DQNManager(128, .99, .9, .05, 1000,
-                                0.005, 1e-4, 5, [0,1,2,3,4], 'cuda', 10000)
+                                0.005, 1e-4, 5, [1,2,3,4,5], 'cuda', 10000)
     # sets the cards of the player
     def set_cards(self, new_cards):
         self.cards = new_cards
@@ -110,7 +111,7 @@ class RoundManager:
             for p in range(len(turn_order)):
                 played_card = turn_order[p].play_card(starting_suite)
                 if len(self.current_pile) == 0:
-                    starting_suite = played_card[1]
+                    starting_suite = self.trump if played_card[0] == 'J' and self.other_bauer(played_card[1], self.trump) else played_card[1]
                 self.add_card(played_card, turn_order[p], p)
 
             winning_player = None
@@ -172,9 +173,9 @@ class RoundManager:
             return True
         elif trump_id == 'H' and jack_code == 'D':
             return True
-        elif trump_id == 'D' and jack_code == 'H':
+        elif trump_id == 'S' and jack_code == 'C':
             return True
-        elif trump_id == 'H' and jack_code == 'D':
+        elif trump_id == 'C' and jack_code == 'S':
             return True
         return False
 
@@ -193,14 +194,14 @@ class RoundManager:
         return {"Trump": trump, "Number": num}
 
 
-def run_game():
+def run_game(num_games):
     p_1 = Player(1, 1, True)
     p_2 = Player(2, 2, False)
     p_3 = Player(3, 1, False)
     p_4 = Player(4, 2, False)
     teams = [p_1, p_2, p_3, p_4]
     manager = RoundManager(teams)
-    for i in range(3):
+    for i in range(num_games):
         requests.get("https://www.deckofcardsapi.com/api/deck/" + deck_id + "/shuffle/")
         manager.draw_phase()
         for p in manager.players:
@@ -219,4 +220,6 @@ def run_game():
 
     return 0
 
-
+if __name__ == "__main__":
+    #print(requests.get("https://www.deckofcardsapi.com/api/deck/new/shuffle/?cards=AS,KS,QS,JS,0S,9S,AC,KC,QC,JC,0C,9C,AH,KH,QH,JH,0H,9H,AD,KD,QD,JD,0D,9D").json())
+    run_game(1)
