@@ -23,32 +23,37 @@ class Player:
         self.card_conversion_no_trump = {"9": 1, "0": 2, "J": 3, "Q": 4, "K": 5, "A": 6}
         self.card_conversion_trump = {"9": 7, "0": 8, "Q": 9, "K": 10, "A": 11}
         self.brain = DQNManager(128, .99, .9, .05, 1000,
-                                0.005, 1e-4, 5, [1,2,3,4,5], 'cuda', 10000)
+                                0.005, 1e-4, 9, [1,2,3,4,5], 'cuda', 10000)
     # sets the cards of the player
     def set_cards(self, new_cards):
         self.cards = new_cards
 
-    def convert_cards_values(self, trump):
-        self.values = [self.card_to_value(card["Card"], self.has_trump([card["Card"]], trump)["Trump"]) for card in self.cards]
-        
     # returns a card that the player has chosen to play
-    def play_card(self, suite):
+    def play_card(self, suite, trump, played_cards):
         # implement brain system
         print(self.cards)
-        card = int(input("Enter Card: ")) - 1
+        values = [self.card_to_value(card["Card"], self.has_trump([card["Card"]], trump)["Trump"]) for card in self.cards]
+        observations = values.extend(played_cards)
+        #card = int(input("Enter Card: ")) - 1
+        card = self.brain.make_action(torch.tensor(observations, device='cuda')).cpu().item()
         while card >= len(self.cards) or card < 0 and self.cards[card] == 'XX':
-            print("Invalid Index!")
-            card = int(input("Enter Card: ")) - 1
+            print("Invalid Index! Choosing random card...")
+            card = random.choice(self.cards)
         plays_card = self.cards[card]
         while suite in self.suites and not (plays_card[1] == suite):
-            print("Play the Correct Suite!")
-            card = int(input("Enter Card: ")) - 1
+            print("Correct Suite not chosen! picking random...")
+            card = random.choice(self.cards)
             plays_card = self.cards[card]
         print("Player " + str(self.self_id) + " played the card: " + str(plays_card))
         self.cards[card] = 'XX'
-        return plays_card
+        values_post = [self.card_to_value(card["Card"], self.has_trump([card["Card"]], trump)["Trump"]) for card in self.cards]
+        played_cards[played_cards.index('XX')] = self.card_to_value(self.cards[card], self.has_trump([self.cards[card]], trump)["Trump"]) 
+        observations_post = values_post.extend(played_cards)
+        return plays_card, observations, observations_post, card
     
     def card_to_value(self, card, is_trump, suit=None):
+        if card == 'XX':
+            return -5
         if suit == None:
             if is_trump:
                 return self.card_conversion_trump[str(card[0])]
@@ -133,13 +138,15 @@ class RoundManager:
         tricks_team_one = 0
         tricks_team_two = 0
         for i in range(5):
-            starting_suite = 'N'
+            starting_suite = None
             winning_player = None
             max_card = 0
+            saved_state = []
             # Play the cards in order
             for p in range(len(turn_order)):
-                played_card = turn_order[p].play_card(starting_suite, self.trump)
+                played_card, current_state, next_state, action = turn_order[p].play_card(starting_suite, self.trump, self.current_pile_values)
                 self.current_pile_values[p] = self.card_to_value(played_card, self.has_trump([played_card], self.trump)["Trump"], starting_suite)
+                saved_state.append([current_state, action, next_state, self.current_pile_values[p]])
                 if self.current_pile_values[p] > max_card:
                     winning_player = turn_order[p]
                     max_card = self.current_pile_values[p]
@@ -147,6 +154,15 @@ class RoundManager:
                     starting_suite = self.trump if played_card[0] == 'J' and self.other_bauer(played_card[1], self.trump) else played_card[1]
                 self.add_card(played_card, turn_order[p], p)
 
+            for index, state in enumerate(saved_state):
+                reward = state[3]
+                if turn_order[index].self_id == winning_player.self_id:
+                    reward += 4
+                elif turn_order[index].team_id == winning_player.team_id:
+                    reward += 2
+                turn_order[index].mem_buffer.push([state[0], state[1], state[2], reward])
+                turn_order[index].optimize_model()
+                turn_order[]
             tricks_team_one += 1 if winning_player.team == 1 else 0
             tricks_team_two += 1 if winning_player.team == 2 else 0
 
