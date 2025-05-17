@@ -19,6 +19,7 @@ class Player:
         self.team = team_id
         self.cards = []
         self.values = []
+        self.suites = []
         self.is_starter = starter
         self.card_conversion_no_trump = {"9": 1, "0": 2, "J": 3, "Q": 4, "K": 5, "A": 6}
         self.card_conversion_trump = {"9": 7, "0": 8, "Q": 9, "K": 10, "A": 11}
@@ -27,42 +28,54 @@ class Player:
     # sets the cards of the player
     def set_cards(self, new_cards):
         self.cards = new_cards
+        self.suites = [card[1] for card in new_cards]
 
     # returns a card that the player has chosen to play
     def play_card(self, suite, trump, played_cards):
+        reward = 0
         # implement brain system
         print(self.cards)
-        values = [self.card_to_value(card["Card"], self.has_trump([card["Card"]], trump)["Trump"]) for card in self.cards]
-        observations = values.extend(played_cards)
+        values = [self.card_to_value(card, self.has_trump([card], trump)["Trump"], trump, suite) for card in self.cards]
+        values.extend(played_cards)
+        observations = copy.deepcopy(values)
         #card = int(input("Enter Card: ")) - 1
-        card = self.brain.make_action(torch.tensor(observations, device='cuda')).cpu().item()
+        card = self.brain.make_action(torch.tensor(observations, dtype=torch.float32, device='cuda')).cpu().item() - 1
         while card >= len(self.cards) or card < 0 and self.cards[card] == 'XX':
             print("Invalid Index! Choosing random card...")
-            card = random.choice(self.cards)
+            card = random.choice(range(len(self.cards)))
+            reward = -99
         plays_card = self.cards[card]
         while suite in self.suites and not (plays_card[1] == suite):
             print("Correct Suite not chosen! picking random...")
-            card = random.choice(self.cards)
+            card = random.choice(range(len(self.cards)))
             plays_card = self.cards[card]
+            reward = -99
         print("Player " + str(self.self_id) + " played the card: " + str(plays_card))
         self.cards[card] = 'XX'
-        values_post = [self.card_to_value(card["Card"], self.has_trump([card["Card"]], trump)["Trump"]) for card in self.cards]
-        played_cards[played_cards.index('XX')] = self.card_to_value(self.cards[card], self.has_trump([self.cards[card]], trump)["Trump"]) 
-        observations_post = values_post.extend(played_cards)
-        return plays_card, observations, observations_post, card
+        suite = plays_card[1] if self.is_starter else suite
+        values_post = [self.card_to_value(card, self.has_trump([card], trump)["Trump"], trump, suite) for card in self.cards]
+        played_cards[played_cards.index(-5)] = values[card]
+        values_post.extend(played_cards)
+        observations_post = copy.deepcopy(values_post)
+        return plays_card, observations, observations_post, card, reward
     
-    def card_to_value(self, card, is_trump, suit=None):
+    def card_to_value(self, card, is_trump, trump, suit=None):
         if card == 'XX':
             return -5
         if suit == None:
             if is_trump:
-                return self.card_conversion_trump[str(card[0])]
+                if card[0] == 'J' and card[1] == trump:
+                    return 13
+                elif card[0] == 'J' and self.other_bauer(card[1], trump):
+                    return 12
+                else:
+                    return self.card_conversion_trump[str(card[0])]
             else:
                 return self.card_conversion_no_trump[str(card[0])]
         if is_trump:
-            if card[0] == 'J' and card[1] == self.trump:
+            if card[0] == 'J' and card[1] == trump:
                 return 13
-            elif self.other_bauer(card[1], self.trump):
+            elif card[0] == 'J' and self.other_bauer(card[1], trump):
                 return 12
             else:
                 return self.card_conversion_trump[str(card[0])]
@@ -80,6 +93,19 @@ class Player:
         elif trump_id == 'C' and jack_code == 'S':
             return True
         return False
+    
+    def has_trump(self, cards, trump_id):
+        num = 0
+        trump = False
+        for card in cards:
+            if card[1] == trump_id:
+                num += 1
+                trump = True
+            if card[0] == 'J':
+                if self.other_bauer(trump_id, card[1]):
+                    num += 1
+                    trump = True
+        return {"Trump": trump, "Number": num}
 
 # Round Manager class that manages each round of Euchre
 class RoundManager:
@@ -87,7 +113,7 @@ class RoundManager:
         self.team_one_score = 0
         self.team_two_score = 0
         self.current_pile = []
-        self.current_pile_values = [0, 0, 0, 0]
+        self.current_pile_values = [-5, -5, -5, -5]
         self.team_called = 0
         self.players = players
         self.trump = None
@@ -111,11 +137,11 @@ class RoundManager:
 
         # Check to see if anyone wants to pick up the card
         for p in range(len(self.players)):
-            hand_info = self.has_trump(self.players[p].cards, self.trump)
+            hand_info = self.has_trump(self.players[p].cards, self.trump[1])
             if hand_info["Number"] >= 2:
                 index_delete = self.players[0].cards.index(random.choice(self.players[0].cards))
                 self.players[0].cards[index_delete] = self.trump
-                self.trump = self.trump
+                self.trump = self.trump[1]
                 self.team_called = self.players[p].team
                 return self.trump
 
@@ -144,14 +170,14 @@ class RoundManager:
             saved_state = []
             # Play the cards in order
             for p in range(len(turn_order)):
-                played_card, current_state, next_state, action = turn_order[p].play_card(starting_suite, self.trump, self.current_pile_values)
+                played_card, current_state, next_state, action, reward = turn_order[p].play_card(starting_suite, self.trump, self.current_pile_values)
                 self.current_pile_values[p] = self.card_to_value(played_card, self.has_trump([played_card], self.trump)["Trump"], starting_suite)
-                saved_state.append([current_state, action, next_state, self.current_pile_values[p]])
+                saved_state.append([current_state, action, next_state, reward + self.current_pile_values[p]])
                 if self.current_pile_values[p] > max_card:
                     winning_player = turn_order[p]
                     max_card = self.current_pile_values[p]
                 if len(self.current_pile) == 0:
-                    starting_suite = self.trump if played_card[0] == 'J' and self.other_bauer(played_card[1], self.trump) else played_card[1]
+                    starting_suite = self.trump if (played_card[0] == 'J' and self.other_bauer(played_card[1], self.trump)) or played_card[1] == self.trump else played_card[1]
                 self.add_card(played_card, turn_order[p], p)
 
             for index, state in enumerate(saved_state):
@@ -160,9 +186,10 @@ class RoundManager:
                     reward += 4
                 elif turn_order[index].team_id == winning_player.team_id:
                     reward += 2
-                turn_order[index].mem_buffer.push([state[0], state[1], state[2], reward])
-                turn_order[index].optimize_model()
-                turn_order[]
+                turn_order[index].brain.mem_buffer.push([state[0], state[1], state[2], reward])
+                turn_order[index].brain.optimize_model()
+                turn_order[index].brain.soft_update()
+                
             tricks_team_one += 1 if winning_player.team == 1 else 0
             tricks_team_two += 1 if winning_player.team == 2 else 0
 
@@ -197,7 +224,12 @@ class RoundManager:
     def card_to_value(self, card, is_trump, suit=None):
         if suit is None:
             if is_trump:
-                return self.card_conversion_trump[str(card[0])]
+                if card[0] == 'J' and card[1] == self.trump:
+                    return 13
+                elif self.other_bauer(card[1], self.trump):
+                    return 12
+                else:
+                    return self.card_conversion_trump[str(card[0])]
             else:
                 return self.card_conversion_no_trump[str(card[0])]
         if is_trump:
