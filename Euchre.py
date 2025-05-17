@@ -40,7 +40,7 @@ class Player:
         observations = copy.deepcopy(values)
         #card = int(input("Enter Card: ")) - 1
         card = self.brain.make_action(torch.tensor(observations, dtype=torch.float32, device='cuda')).cpu().item() - 1
-        while card >= len(self.cards) or card < 0 and self.cards[card] == 'XX':
+        while card >= len(self.cards) or card < 0 or self.cards[card] == 'XX':
             print("Invalid Index! Choosing random card...")
             card = random.choice(range(len(self.cards)))
             reward = -99
@@ -128,9 +128,7 @@ class RoundManager:
             p.set_cards([card["code"] for card in
                          requests.get("https://www.deckofcardsapi.com/api/deck/" + deck_id + "/draw/?count=5").json()[
                              "cards"]])
-            self.trump = \
-            requests.get("https://www.deckofcardsapi.com/api/deck/" + deck_id + "/draw/?count=1").json()["cards"][0][
-                "code"]
+        self.trump = requests.get("https://www.deckofcardsapi.com/api/deck/" + deck_id + "/draw/?count=1").json()["cards"][0]["code"]
 
     def bet_phase(self):
         possible_bets = ['S', 'D', 'C', 'H']
@@ -184,9 +182,9 @@ class RoundManager:
                 reward = state[3]
                 if turn_order[index].self_id == winning_player.self_id:
                     reward += 4
-                elif turn_order[index].team_id == winning_player.team_id:
+                elif turn_order[index].team == winning_player.team:
                     reward += 2
-                turn_order[index].brain.mem_buffer.push([state[0], state[1], state[2], reward])
+                turn_order[index].brain.mem_buffer.push(state[0], state[1], state[2], reward)
                 turn_order[index].brain.optimize_model()
                 turn_order[index].brain.soft_update()
                 
@@ -201,6 +199,7 @@ class RoundManager:
 
             # reset current pile
             self.current_pile.clear()
+            self.current_pile_values = [-5, -5, -5, -5]
         return {"Team_1": tricks_team_one, "Team_2": tricks_team_two,
                 "Winner": 1 if tricks_team_one > tricks_team_two else 2}
 
