@@ -22,7 +22,7 @@ def score_card(card: str, trump: str, starting_suite: str):
         return non_trump_convert[card[0]]
         
 
-def get_bauer_type(card, trump):
+def get_bauer_type(card: str, trump: str):
     other_bauer = {'H': 'D', 'S': 'C', 'C': 'S', 'D': 'H'}
     if card[1] == trump:
         return 3
