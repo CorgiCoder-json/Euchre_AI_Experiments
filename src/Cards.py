@@ -13,7 +13,7 @@ class Deck:
         np.random.shuffle(self.deck)
     
     def draw(self, num: int) -> list[str]:
-        cards: list[str] = [''] 
+        cards: list[str] = [] 
         for i in range(num):
             cards.append(self.deck.pop(0))
         return cards

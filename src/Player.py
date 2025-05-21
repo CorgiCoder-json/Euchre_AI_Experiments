@@ -5,4 +5,5 @@ class Player:
         self.brain = brain
         self.hand: list[str] = ['']
     def play_card(self):
+        pass
         
